@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:0
 ENV PORT=10000
 
-# Chromium és a szükséges grafikus/webes csomagok telepítése
+# Alapcsomagok telepítése
 RUN apt-get update && apt-get install -y \
     chromium \
     xvfb \
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Nginx reverse proxy (Kezeli a titkosított kapcsolatot a böngésződ és a szerver között)
+# Nginx beállítása
 RUN echo 'server { \
     listen 10000; \
     location / { \
@@ -33,16 +33,16 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/sites-available/default
 
-# Automatikus átirányítás a teljes képernyős, helyes WebSocket útvonalra
+# Automatikus csatlakozás
 RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url='\''vnc_lite.html?autoconnect=true&scale=true&path=websockify'\''" /></head><body></body></html>' > /usr/share/novnc/index.html
 
-# Supervisord konfiguráció
+# Supervisord - Teljesítménynövelő beállításokkal
 RUN echo '[supervisord]\n\
 nodaemon=true\n\
 user=root\n\
 \n\
 [program:xvfb]\n\
-command=/usr/bin/Xvfb :0 -screen 0 1280x720x16\n\
+command=/usr/bin/Xvfb :0 -screen 0 1280x720x16 -nolisten tcp\n\
 priority=10\n\
 autorestart=true\n\
 \n\
@@ -52,7 +52,7 @@ priority=20\n\
 autorestart=true\n\
 \n\
 [program:x11vnc]\n\
-command=/bin/bash -c "sleep 2 && /usr/bin/x11vnc -display :0 -nopw -listen 127.0.0.1 -forever -shared"\n\
+command=/bin/bash -c "sleep 2 && /usr/bin/x11vnc -display :0 -nopw -listen 127.0.0.1 -forever -shared -deferupdate 20"\n\
 priority=30\n\
 autorestart=true\n\
 \n\
@@ -67,7 +67,7 @@ priority=50\n\
 autorestart=true\n\
 \n\
 [program:chromium]\n\
-command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk https://discord.com/login"\n\
+command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk --disable-smooth-scrolling --disable-extensions --disable-sync --disable-background-networking --disable-default-apps --mute-audio --no-first-run --disable-animations https://discord.com/login"\n\
 priority=60\n\
 autorestart=true\n' > /etc/supervisord.conf
 
