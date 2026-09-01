@@ -4,9 +4,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:0
 ENV PORT=10000
 
-# Falkon (könnyű böngésző) és a grafikus alapok telepítése
+# Chromium és a szükséges grafikus/webes csomagok telepítése
 RUN apt-get update && apt-get install -y \
-    falkon \
+    chromium \
     xvfb \
     x11vnc \
     novnc \
@@ -16,12 +16,12 @@ RUN apt-get update && apt-get install -y \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Nginx reverse proxy (WebSocket és HTML kiszolgálás a 10000-es porton)
+# Nginx reverse proxy (Kezeli a titkosított kapcsolatot a böngésződ és a szerver között)
 RUN echo 'server { \
     listen 10000; \
     location / { \
         root /usr/share/novnc; \
-        index vnc_lite.html; \
+        index index.html; \
     } \
     location /websockify { \
         proxy_pass http://127.0.0.1:6080/; \
@@ -32,6 +32,9 @@ RUN echo 'server { \
         proxy_read_timeout 86400; \
     } \
 }' > /etc/nginx/sites-available/default
+
+# Automatikus átirányítás a teljes képernyős, helyes WebSocket útvonalra
+RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url='\''vnc_lite.html?autoconnect=true&scale=true&path=websockify'\''" /></head><body></body></html>' > /usr/share/novnc/index.html
 
 # Supervisord konfiguráció
 RUN echo '[supervisord]\n\
@@ -63,8 +66,8 @@ command=/usr/sbin/nginx -g "daemon off;"\n\
 priority=50\n\
 autorestart=true\n\
 \n\
-[program:browser]\n\
-command=/bin/bash -c "sleep 4 && /usr/bin/falkon https://discord.com/login"\n\
+[program:chromium]\n\
+command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk https://discord.com/login"\n\
 priority=60\n\
 autorestart=true\n' > /etc/supervisord.conf
 
