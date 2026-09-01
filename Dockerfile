@@ -1,11 +1,13 @@
-FROM lscr.io/linuxserver/webtop:chromium-alpine
+FROM kasmweb/chromium:1.15.0-rolling
 
-# Render port beállítása és socat telepítése a forgalom átirányításához
-RUN apk add --no-cache socat
+USER root
 
-# Discord automatikus megnyitása induláskor
-ENV START_PAGE="https://discord.com/login"
+# Socat telepítése a belső HTTPS port átirányításához a Render portjára
+RUN apt-get update && apt-get install -y socat && rm -rf /var/lib/apt/lists/*
 
-# A 3000-es belső webes port átirányítása a Render 10000-es portjára
+ENV START_URL="https://discord.com/login"
+
 EXPOSE 10000
-CMD /init & sleep 3 && socat TCP-LISTEN:10000,fork TCP:127.0.0.1:3000
+
+# A Kasmweb belső 6901-es webes portját kötjük a Render 10000-es portjára
+CMD /dockerstartup/kasm_default_profile.sh /dockerstartup/vnc_startup.sh /dockerstartup/kasm_startup.sh & sleep 4 && socat TCP-LISTEN:10000,fork TCP:127.0.0.1:6901
