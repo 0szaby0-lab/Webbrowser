@@ -2,10 +2,11 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:0
+ENV PORT=10000
 
-# Szükséges komponensek és Nginx telepítése
+# Falkon (könnyű böngésző) és a grafikus alapok telepítése
 RUN apt-get update && apt-get install -y \
-    chromium \
+    falkon \
     xvfb \
     x11vnc \
     novnc \
@@ -15,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Nginx reverse proxy beállítása (kezeli a Render HTTPS -> belső WS kapcsolatot)
+# Nginx reverse proxy (WebSocket és HTML kiszolgálás a 10000-es porton)
 RUN echo 'server { \
     listen 10000; \
     location / { \
@@ -32,7 +33,7 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/sites-available/default
 
-# Supervisord folyamatvezérlő beállítása
+# Supervisord konfiguráció
 RUN echo '[supervisord]\n\
 nodaemon=true\n\
 user=root\n\
@@ -53,7 +54,7 @@ priority=30\n\
 autorestart=true\n\
 \n\
 [program:websockify]\n\
-command=/bin/bash -c "sleep 3 && /usr/bin/websockify 6080 127.0.0.1:5900"\n\
+command=/bin/bash -c "sleep 3 && /usr/bin/websockify 127.0.0.1:6080 127.0.0.1:5900"\n\
 priority=40\n\
 autorestart=true\n\
 \n\
@@ -62,8 +63,8 @@ command=/usr/sbin/nginx -g "daemon off;"\n\
 priority=50\n\
 autorestart=true\n\
 \n\
-[program:chromium]\n\
-command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk https://discord.com/login"\n\
+[program:browser]\n\
+command=/bin/bash -c "sleep 4 && /usr/bin/falkon https://discord.com/login"\n\
 priority=60\n\
 autorestart=true\n' > /etc/supervisord.conf
 
