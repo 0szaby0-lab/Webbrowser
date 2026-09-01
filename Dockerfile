@@ -2,13 +2,15 @@ FROM kasmweb/chromium:1.15.0-rolling
 
 USER root
 
-# Nginx telepítése a Render HTTP -> Kasm HTTPS fordításhoz
+# Nginx telepítése
 RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
 
-# Automatikus Discord megnyitás
+# Belépési adatok beállítása
+ENV VNC_USER="kasm_user"
+ENV VNC_PW="Discord123!"
 ENV START_URL="https://discord.com/login"
 
-# Nginx reverse proxy beállítása (SSL átjáró és WebSocket támogatás)
+# Nginx konfiguráció az Authorization és WebSocket fejlécek továbbításával
 RUN echo 'server { \
     listen 10000; \
     location / { \
@@ -18,11 +20,12 @@ RUN echo 'server { \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "Upgrade"; \
         proxy_set_header Host $host; \
+        proxy_set_header Authorization $http_authorization; \
+        proxy_pass_header Authorization; \
         proxy_read_timeout 86400; \
     } \
 }' > /etc/nginx/sites-available/default
 
 EXPOSE 10000
 
-# Elindítjuk az Nginx-et a háttérben, majd átadjuk az irányítást a Kasm hivatalos indítójának
 ENTRYPOINT ["/bin/bash", "-c", "service nginx start && exec /dockerstartup/vnc_startup.sh /dockerstartup/kasm_startup.sh"]
