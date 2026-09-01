@@ -2,9 +2,8 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:0
-ENV PORT=10000
 
-# Szükséges csomagok telepítése (teljes képernyős VNC + böngésző)
+# Szükséges komponensek és Nginx telepítése
 RUN apt-get update && apt-get install -y \
     chromium \
     xvfb \
@@ -13,13 +12,27 @@ RUN apt-get update && apt-get install -y \
     websockify \
     openbox \
     supervisor \
-    curl \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Automatikus teljes képernyős átirányítás a webes felületre
-RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url='\''vnc_lite.html?autoconnect=true&scale=true'\''" /></head><body></body></html>' > /usr/share/novnc/index.html
+# Nginx reverse proxy beállítása (kezeli a Render HTTPS -> belső WS kapcsolatot)
+RUN echo 'server { \
+    listen 10000; \
+    location / { \
+        root /usr/share/novnc; \
+        index vnc_lite.html; \
+    } \
+    location /websockify { \
+        proxy_pass http://127.0.0.1:6080/; \
+        proxy_http_version 1.1; \
+        proxy_set_header Upgrade $http_upgrade; \
+        proxy_set_header Connection "Upgrade"; \
+        proxy_set_header Host $host; \
+        proxy_read_timeout 86400; \
+    } \
+}' > /etc/nginx/sites-available/default
 
-# Supervisord konfiguráció generálása közvetlenül a konténerben
+# Supervisord folyamatvezérlő beállítása
 RUN echo '[supervisord]\n\
 nodaemon=true\n\
 user=root\n\
@@ -39,14 +52,19 @@ command=/bin/bash -c "sleep 2 && /usr/bin/x11vnc -display :0 -nopw -listen 127.0
 priority=30\n\
 autorestart=true\n\
 \n\
-[program:novnc]\n\
-command=/bin/bash -c "sleep 2 && /usr/bin/websockify --web /usr/share/novnc 10000 127.0.0.1:5900"\n\
+[program:websockify]\n\
+command=/bin/bash -c "sleep 3 && /usr/bin/websockify 6080 127.0.0.1:5900"\n\
 priority=40\n\
+autorestart=true\n\
+\n\
+[program:nginx]\n\
+command=/usr/sbin/nginx -g "daemon off;"\n\
+priority=50\n\
 autorestart=true\n\
 \n\
 [program:chromium]\n\
 command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk https://discord.com/login"\n\
-priority=50\n\
+priority=60\n\
 autorestart=true\n' > /etc/supervisord.conf
 
 EXPOSE 10000
