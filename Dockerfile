@@ -1,31 +1,54 @@
-FROM kasmweb/chromium:1.15.0-rolling
+FROM debian:bookworm-slim
 
-USER root
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:0
+ENV PORT=10000
 
-# Nginx telepítése
-RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
+# Szükséges csomagok telepítése (teljes képernyős VNC + böngésző)
+RUN apt-get update && apt-get install -y \
+    chromium \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    openbox \
+    supervisor \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Belépési adatok beállítása
-ENV VNC_USER="kasm_user"
-ENV VNC_PW="Discord123!"
-ENV START_URL="https://discord.com/login"
+# Automatikus teljes képernyős átirányítás a webes felületre
+RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url='\''vnc_lite.html?autoconnect=true&scale=true'\''" /></head><body></body></html>' > /usr/share/novnc/index.html
 
-# Nginx konfiguráció az Authorization és WebSocket fejlécek továbbításával
-RUN echo 'server { \
-    listen 10000; \
-    location / { \
-        proxy_pass https://127.0.0.1:6901; \
-        proxy_ssl_verify off; \
-        proxy_http_version 1.1; \
-        proxy_set_header Upgrade $http_upgrade; \
-        proxy_set_header Connection "Upgrade"; \
-        proxy_set_header Host $host; \
-        proxy_set_header Authorization $http_authorization; \
-        proxy_pass_header Authorization; \
-        proxy_read_timeout 86400; \
-    } \
-}' > /etc/nginx/sites-available/default
+# Supervisord konfiguráció generálása közvetlenül a konténerben
+RUN echo '[supervisord]\n\
+nodaemon=true\n\
+user=root\n\
+\n\
+[program:xvfb]\n\
+command=/usr/bin/Xvfb :0 -screen 0 1280x720x16\n\
+priority=10\n\
+autorestart=true\n\
+\n\
+[program:openbox]\n\
+command=/bin/bash -c "sleep 1 && /usr/bin/openbox"\n\
+priority=20\n\
+autorestart=true\n\
+\n\
+[program:x11vnc]\n\
+command=/bin/bash -c "sleep 2 && /usr/bin/x11vnc -display :0 -nopw -listen 127.0.0.1 -forever -shared"\n\
+priority=30\n\
+autorestart=true\n\
+\n\
+[program:novnc]\n\
+command=/bin/bash -c "sleep 2 && /usr/bin/websockify --web /usr/share/novnc 10000 127.0.0.1:5900"\n\
+priority=40\n\
+autorestart=true\n\
+\n\
+[program:chromium]\n\
+command=/bin/bash -c "sleep 4 && /usr/bin/chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --window-position=0,0 --kiosk https://discord.com/login"\n\
+priority=50\n\
+autorestart=true\n' > /etc/supervisord.conf
 
 EXPOSE 10000
 
-ENTRYPOINT ["/bin/bash", "-c", "service nginx start && exec /dockerstartup/vnc_startup.sh /dockerstartup/kasm_startup.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
