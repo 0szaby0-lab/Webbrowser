@@ -1,24 +1,11 @@
-FROM debian:bookworm-slim
+FROM lscr.io/linuxserver/webtop:chromium-alpine
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV DISPLAY=:0
+# Render port beállítása és socat telepítése a forgalom átirányításához
+RUN apk add --no-cache socat
 
-RUN apt-get update && apt-get install -y \
-    chromium \
-    xvfb \
-    x11vnc \
-    novnc \
-    websockify \
-    openbox \
-    supervisor \
-    && rm -rf /var/lib/apt/lists/*
+# Discord automatikus megnyitása induláskor
+ENV START_PAGE="https://discord.com/login"
 
-# A renderelt kezdőlap automatikusan a helyes websockify útvonalra irányít
-RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url='\''vnc.html?autoconnect=true&resize=scale&path=websockify'\''" /></head><body></body></html>' > /usr/share/novnc/index.html
-
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
+# A 3000-es belső webes port átirányítása a Render 10000-es portjára
 EXPOSE 10000
-CMD ["/entrypoint.sh"]
+CMD /init & sleep 3 && socat TCP-LISTEN:10000,fork TCP:127.0.0.1:3000
